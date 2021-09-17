@@ -309,6 +309,8 @@ list(APPEND test_srcs
   testreq2.pem
   testrsa.pem
   testrsapub.pem
+  testrsa_withattrs.der
+  testrsa_withattrs.pem
   testsid.pem
   testx509.pem
   Uss.cnf
