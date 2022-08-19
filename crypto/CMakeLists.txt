@@ -2,7 +2,7 @@ set(lib_name crypto)
 ########################################
 set(gen_file buildinf.h)
 set(BUILDINF_PLATFORM ${CMAKE_SYSTEM_NAME})
-if(DEFINED OPENSSL_VER) # passed in via externpro
+if(DEFINED XP_NAMESPACE) # passed in via externpro
   string(TIMESTAMP BUILDINF_DATE "%a %b %d %H:%M:%S %Y UTC" UTC)
 else()
   string(TIMESTAMP BUILDINF_DATE "%a %b %d %Y UTC" UTC)
@@ -1782,7 +1782,7 @@ target_include_directories(${lib_name} PRIVATE
   ec/curve448/arch_32
   modes # evp includes modes_lcl.h
   PUBLIC
-  $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include${verDir}>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
 target_compile_definitions(${lib_name} PUBLIC $<INSTALL_INTERFACE:OPENSSL_API_COMPAT=0x10100000L>)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -1793,12 +1793,11 @@ check_library_exists(ws2_32 getch "" CRYPTO_HAS_WS2_32)
 if(CRYPTO_HAS_WS2_32)
   target_link_libraries(${lib_name} PRIVATE ws2_32)
 endif()
-set_target_properties(${lib_name} PROPERTIES OUTPUT_NAME ${lib_name}${ver})
 ########################################
 install(TARGETS ${lib_name} EXPORT ${targetsFile}
-  RUNTIME DESTINATION bin
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )
 ########################################
 list(APPEND ${lib_name}_all ${${lib_name}_libsrcs})

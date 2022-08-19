@@ -310,7 +310,7 @@ list(REMOVE_ITEM openssl_srcs
   openssl/opensslconf.h.cmake.in
   openssl/opensslconf.h.in
   )
-install(FILES ${openssl_srcs} DESTINATION include${verDir}/${PROJECT_NAME})
+install(FILES ${openssl_srcs} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME})
 ########################################
 list(APPEND ${lib_name}_libsrcs CMakeLists.txt)
 list(REMOVE_ITEM ${lib_name}_libsrcs

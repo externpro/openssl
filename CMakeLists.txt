@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(openssl LANGUAGES C ASM)
 include(flags OPTIONAL)
+include(GNUInstallDirs)
 ########################################
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # enables MSVC Solution Folders
 # NOTE: attempted to make OPENSSL_DEFS match other build systems (node.js and openssl perl)
@@ -96,11 +97,7 @@ function(compareCmakeFilesys files)
   endif()
 endfunction()
 ########################################
-if(DEFINED OPENSSL_VER)
-  set(ver _${OPENSSL_VER})
-  set(verDir /${PROJECT_NAME}${ver})
-endif()
-set(targetsFile ${PROJECT_NAME}${ver}-targets)
+set(targetsFile ${PROJECT_NAME}-targets)
 ########################################
 add_subdirectory(include)
 add_subdirectory(crypto)
@@ -110,4 +107,4 @@ add_subdirectory(test)
 if(DEFINED XP_NAMESPACE)
   set(nameSpace NAMESPACE ${XP_NAMESPACE}::)
 endif()
-install(EXPORT ${targetsFile} DESTINATION lib/cmake ${nameSpace})
+install(EXPORT ${targetsFile} DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake ${nameSpace})

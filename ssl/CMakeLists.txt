@@ -85,12 +85,11 @@ list(APPEND ${lib_name}_libsrcs ${statem_srcs})
 ########################################
 add_library(${lib_name} STATIC ${${lib_name}_libsrcs})
 target_link_libraries(${lib_name} PUBLIC crypto)
-set_target_properties(${lib_name} PROPERTIES OUTPUT_NAME ${lib_name}${ver})
 ########################################
 install(TARGETS ${lib_name} EXPORT ${targetsFile}
-  RUNTIME DESTINATION bin
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )
 ########################################
 list(APPEND ${lib_name}_all ${${lib_name}_libsrcs})
