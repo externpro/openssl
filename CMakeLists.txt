@@ -3,8 +3,18 @@ set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES .devcontainer/cmake/xproinc.cmake)
 project(openssl LANGUAGES C ASM)
 include(GNUInstallDirs)
 include(xpflags)
-########################################
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # enables MSVC Solution Folders
+########################################
+# assembly from node.js
+include(FetchContent)
+FetchContent_Declare(node
+  GIT_REPOSITORY https://github.com/nodejs/node
+  GIT_TAG v14.17.6 # for openssl 1.1.1l
+  GIT_SHALLOW TRUE
+  )
+FetchContent_MakeAvailable(node)
+include(asmfromnode/copyfromnode.cmake)
+########################################
 # NOTE: attempted to make OPENSSL_DEFS match other build systems (node.js and openssl perl)
 set(OPENSSL_DEFS
   -D_REENTRANT
