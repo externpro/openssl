@@ -98,17 +98,25 @@ function(compareCmakeFilesys files)
   endif()
 endfunction()
 ########################################
+set(libs crypto ssl)
+if(DEFINED XP_NAMESPACE)
+  set(nameSpace NAMESPACE ${XP_NAMESPACE}::)
+  list(TRANSFORM libs PREPEND "${XP_NAMESPACE}::")
+endif()
+if(NOT DEFINED XP_INSTALL_CMAKEDIR)
+  set(XP_INSTALL_CMAKEDIR ${CMAKE_INSTALL_DATADIR}/cmake)
+endif()
 set(targetsFile ${PROJECT_NAME}-targets)
+string(JOIN "\n" EXT1
+  "set(THREAD_PREFER_PTHREAD_FLAG ON)"
+  "find_package(Threads REQUIRED) # crypto depends on Threads::Threads"
+  ""
+  )
+xpPackageDevel(TARGETS_FILE ${targetsFile} LIBRARIES ${libs})
 ########################################
 add_subdirectory(include)
 add_subdirectory(crypto)
 add_subdirectory(ssl)
 add_subdirectory(apps)
 add_subdirectory(test)
-if(DEFINED XP_NAMESPACE)
-  set(nameSpace NAMESPACE ${XP_NAMESPACE}::)
-endif()
-if(NOT DEFINED XP_INSTALL_CMAKEDIR)
-  set(XP_INSTALL_CMAKEDIR ${CMAKE_INSTALL_DATADIR}/cmake)
-endif()
 install(EXPORT ${targetsFile} DESTINATION ${XP_INSTALL_CMAKEDIR} ${nameSpace})
