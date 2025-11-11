@@ -12,3 +12,6 @@
 [submodule ".devcontainer"]
 	path = .devcontainer
 	url = https://github.com/externpro/externpro
+[submodule "asmfromnode"]
+	path = asmfromnode
+	url = https://github.com/externpro/opensslasm
