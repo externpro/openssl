@@ -28,10 +28,15 @@ elseif(UNIX)
     )
   set(asmDir asmfromnode/archs/linux-${CMAKE_SYSTEM_PROCESSOR}/asm)
 endif()
-if((CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64") AND WIN32)
-  enable_language(ASM_NASM) # -DCMAKE_ASM_NASM_COMPILER=/path/to/nasm.exe
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  if(WIN32)
+    xpFindPkg(PKGS nasm)
+    xpGetPkgVar(nasm EXE) # sets NASM_EXE
+    set(CMAKE_ASM_NASM_COMPILER ${NASM_EXE})
+    enable_language(ASM_NASM)
+  endif()
 endif()
-if(EXISTS ${CMAKE_SOURCE_DIR}/${asmDir} AND IS_DIRECTORY ${CMAKE_SOURCE_DIR}/${asmDir})
+if(CMAKE_ASM_NASM_COMPILER_LOADED AND EXISTS ${CMAKE_SOURCE_DIR}/${asmDir} AND IS_DIRECTORY ${CMAKE_SOURCE_DIR}/${asmDir})
   set(ASM_BUILD TRUE)
   list(APPEND OPENSSL_DEFS
     -DOPENSSL_CPUID_OBJ
@@ -62,11 +67,13 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/${asmDir} AND IS_DIRECTORY ${CMAKE_SOURCE_DIR}/${a
       -DX25519_ASM
       )
   endif()
+  message(STATUS "ASM_BUILD: ${ASM_BUILD}")
 else()
   set(ASM_BUILD FALSE)
   list(APPEND OPENSSL_DEFS
     -DOPENSSL_NO_ASM
     )
+  message(STATUS "ASM_BUILD: ${ASM_BUILD}")
 endif()
 add_definitions(${OPENSSL_DEFS})
 ########################################
