@@ -5,20 +5,10 @@ include(GNUInstallDirs)
 include(xpflags)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # enables MSVC Solution Folders
 ########################################
-# assembly from node.js
-include(FetchContent)
-FetchContent_Declare(node
-  GIT_REPOSITORY https://github.com/nodejs/node
-  GIT_TAG v14.17.6 # for openssl 1.1.1l
-  GIT_SHALLOW TRUE
-  )
-FetchContent_MakeAvailable(node)
-include(asmfromnode/copyfromnode.cmake)
-########################################
 # NOTE: attempted to make OPENSSL_DEFS match other build systems (node.js and openssl perl)
 set(OPENSSL_DEFS
   -D_REENTRANT
-  -DL_ENDIAN
+  -DL_ENDIAN # NOTE: SHA1_ASM must define L_ENDIAN for x86
   -DOPENSSL_PIC
   -DOPENSSLDIR=\"/etc/ssl\"
   -DENGINESDIR=\"/dev/null\"
@@ -31,59 +21,57 @@ if(WIN32)
     -D_CRT_SECURE_NO_DEPRECATE
     -D_WINSOCK_DEPRECATED_NO_WARNINGS
     )
-  set(asmDir asmfromnode/archs/VC-WIN64A/asm)
 elseif(UNIX)
   list(APPEND OPENSSL_DEFS
     -DOPENSSL_USE_NODELETE
     )
-  set(asmDir asmfromnode/archs/linux-${CMAKE_SYSTEM_PROCESSOR}/asm)
 endif()
+########################################
+include(FetchContent)
+FetchContent_Declare(node
+  GIT_REPOSITORY https://github.com/nodejs/node
+  GIT_TAG v14.17.6 # for openssl 1.1.1l
+  GIT_SHALLOW TRUE
+  )
+FetchContent_MakeAvailable(node)
+# assembly from node.js
+include(asmfromnode/copyfromnode.cmake)
+set(ASM_BUILD FALSE)
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
   if(WIN32)
+    set(asmDir ${CMAKE_SOURCE_DIR}/asmfromnode/archs/VC-WIN64A/asm)
     xpFindPkg(PKGS nasm)
     xpGetPkgVar(nasm EXE) # sets NASM_EXE
     set(CMAKE_ASM_NASM_COMPILER ${NASM_EXE})
     enable_language(ASM_NASM)
+  elseif(UNIX)
+    set(asmDir ${CMAKE_SOURCE_DIR}/asmfromnode/archs/linux-${CMAKE_SYSTEM_PROCESSOR}/asm)
+    xpFindPkg(PKGS yasm)
+    xpGetPkgVar(yasm EXE) # sets YASM_EXE
+    get_target_property(yasmExe ${YASM_EXE} LOCATION)
+    set(CMAKE_ASM_NASM_COMPILER ${yasmExe})
+    enable_language(ASM_NASM)
+  endif()
+  if(CMAKE_ASM_NASM_COMPILER_LOADED AND EXISTS ${asmDir} AND IS_DIRECTORY ${asmDir})
+    set(ASM_BUILD TRUE)
+  endif()
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+  enable_language(ASM)
+  if(APPLE)
+    set(asmDir ${CMAKE_SOURCE_DIR}/asmfromnode/archs/darwin64-arm64-cc/asm)
+  elseif(UNIX)
+    set(asmDir ${CMAKE_SOURCE_DIR}/asmfromnode/archs/linux-aarch64/asm)
+  endif()
+  if(CMAKE_ASM_COMPILER_LOADED AND EXISTS ${asmDir} AND IS_DIRECTORY ${asmDir})
+    set(ASM_BUILD TRUE)
   endif()
 endif()
-if(CMAKE_ASM_NASM_COMPILER_LOADED AND EXISTS ${CMAKE_SOURCE_DIR}/${asmDir} AND IS_DIRECTORY ${CMAKE_SOURCE_DIR}/${asmDir})
-  set(ASM_BUILD TRUE)
-  list(APPEND OPENSSL_DEFS
-    -DOPENSSL_CPUID_OBJ
-    -DOPENSSL_IA32_SSE2
-    -DOPENSSL_BN_ASM_MONT
-    -DOPENSSL_BN_ASM_GF2m
-    -DSHA1_ASM # must define L_ENDIAN for x86
-    -DSHA256_ASM
-    -DSHA512_ASM
-    -DRC4_ASM
-    -DMD5_ASM
-    -DVPAES_ASM
-    -DGHASH_ASM
-    -DECP_NISTZ256_ASM
-    -DPOLY1305_ASM
-    )
-  if(WIN32)
-    list(APPEND OPENSSL_DEFS
-      -DRMD160_ASM
-      -DAES_ASM
-      -DWHIRLPOOL_ASM
-      -DPADLOCK_ASM
-      )
-  elseif(UNIX)
-    list(APPEND OPENSSL_DEFS
-      -DOPENSSL_BN_ASM_MONT5
-      -DKECCAK1600_ASM
-      -DX25519_ASM
-      )
-  endif()
-  message(STATUS "ASM_BUILD: ${ASM_BUILD}")
+if(ASM_BUILD)
+  message(STATUS "ASM directory: ${asmDir}")
 else()
-  set(ASM_BUILD FALSE)
   list(APPEND OPENSSL_DEFS
     -DOPENSSL_NO_ASM
     )
-  message(STATUS "ASM_BUILD: ${ASM_BUILD}")
 endif()
 add_definitions(${OPENSSL_DEFS})
 ########################################
