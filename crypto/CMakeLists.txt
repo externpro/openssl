@@ -30,6 +30,13 @@ endforeach()
 set(BUILDINF_COMPILER_FLAGS "${BUILDINF_COMPILER_FLAGS}'\\0'")
 configure_file(${gen_file}.cmake.in ${gen_file} @ONLY)
 ########################################
+set(asmDir ${asmDir}/crypto)
+if(MSVC)
+  set(asmExt asm)
+elseif(UNIX)
+  set(asmExt s)
+endif()
+########################################
 # root
 set(root_srcs # order from crypto/build.info
   build.info
@@ -69,6 +76,28 @@ list(APPEND root_srcs
   ${CMAKE_CURRENT_BINARY_DIR}/buildinf.h
   )
 source_group("" FILES ${root_srcs})
+##########
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(root_asm_srcs
+    ${asmDir}/x86_64cpuid.${asmExt} # cpuid_asm_src
+    )
+  source_group(_asm FILES ${root_asm_srcs})
+  list(APPEND root_srcs ${root_asm_srcs})
+  set(asm_defs
+    OPENSSL_CPUID_OBJ
+    OPENSSL_IA32_SSE2
+    )
+elseif(CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
+  set(root_asm_srcs
+    armcap.c
+    ${asmDir}/arm64cpuid.S
+    )
+  source_group(_asm FILES ${root_asm_srcs})
+  list(APPEND root_srcs ${root_asm_srcs})
+  set(asm_defs
+    OPENSSL_CPUID_OBJ
+    )
+endif()
 list(APPEND ${lib_name}_libsrcs ${root_srcs})
 ##########
 list(APPEND root_extra # order from crypto/build.info EXTRA
@@ -83,7 +112,7 @@ list(APPEND root_extra # order from crypto/build.info EXTRA
   )
 list(APPEND root_extra # in directory, not in build.info
   arm_arch.h
-  armcap.c
+  armcap.c # NOTE: needed for arm64|aarch64 (root_asm_srcs)
   c64xpluscpuid.pl
   dllmain.c
   LPdir_nyi.c
@@ -122,12 +151,43 @@ list(APPEND aes_srcs
   aes/aes_local.h
   aes/aes_core.c # aes_asm_src DEFAULT (Configurations/00-base-templates.conf)
   aes/aes_cbc.c # aes_asm_src DEFAULT (Configurations/00-base-templates.conf)
-  aes/aes_x86core.c # needed on msw: unresolved external symbol AES_[en|de]crypt
   )
 source_group(aes FILES ${aes_srcs})
+##########
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(aes_asm_srcs
+    #aes/aes_x86core.c # needed on msw: unresolved external symbol AES_[en|de]crypt
+    ${asmDir}/aes/aesni-mb-x86_64.${asmExt}
+    ${asmDir}/aes/aesni-sha1-x86_64.${asmExt}
+    ${asmDir}/aes/aesni-sha256-x86_64.${asmExt}
+    ${asmDir}/aes/aesni-x86_64.${asmExt}
+    #${asmDir}/aes/aes-x86_64.${asmExt} # multiple definition of AES_encrypt (first defined in aes_core.c)
+    #${asmDir}/aes/bsaes-x86_64.${asmExt} # not in aes_asm_src (Configurations/00-base-templates.conf)
+    ${asmDir}/aes/vpaes-x86_64.${asmExt}
+    )
+  source_group(aes\\_asm FILES ${aes_asm_srcs})
+  list(APPEND aes_srcs ${aes_asm_srcs})
+  list(APPEND asm_defs
+    AESNI_ASM
+    #AES_ASM
+    #BSAES_ASM
+    VPAES_ASM
+    )
+elseif(CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
+  set(aes_asm_srcs
+    ${asmDir}/aes/aesv8-armx.S
+    ${asmDir}/aes/vpaes-armv8.S
+    )
+  source_group(aes\\_asm FILES ${aes_asm_srcs})
+  list(APPEND aes_srcs ${aes_asm_srcs})
+  list(APPEND asm_defs
+    VPAES_ASM
+    )
+endif()
 list(APPEND ${lib_name}_libsrcs ${aes_srcs})
 ##########
 set(aes_extra # TODO asm
+  aes/aes_x86core.c # NOTE: needed on x86
   aes/asm/aes-armv4.pl
   aes/asm/aes-c64xplus.pl
   aes/asm/aesfx-sparcv9.pl
@@ -374,16 +434,37 @@ list(APPEND bn_srcs
   bn/bn_local.h
   bn/bn_prime.h
   )
-if(NOT ASM_BUILD)
-  list(APPEND bn_srcs
-    bn/bn_asm.c # bn_asm_src DEFAULT (Configurations/00-base-templates.conf)
+list(APPEND bn_srcs
+  bn/bn_asm.c # bn_asm_src DEFAULT (Configurations/00-base-templates.conf)
+  )
+source_group(bn FILES ${bn_srcs})
+##########
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(bn_asm_srcs
+    bn/asm/x86_64-gcc.c
+    ${asmDir}/bn/rsaz-avx2.${asmExt}
+    ${asmDir}/bn/rsaz-x86_64.${asmExt}
+    ${asmDir}/bn/x86_64-gf2m.${asmExt}
+    ${asmDir}/bn/x86_64-mont5.${asmExt}
+    ${asmDir}/bn/x86_64-mont.${asmExt}
     )
-else()
-  set(bn_extra
-    bn/bn_asm.c
+  source_group(bn\\_asm FILES ${bn_asm_srcs})
+  list(APPEND bn_srcs ${bn_asm_srcs})
+  list(APPEND asm_defs
+    OPENSSL_BN_ASM_GF2m
+    OPENSSL_BN_ASM_MONT5
+    OPENSSL_BN_ASM_MONT
+    )
+elseif(CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
+  set(bn_asm_srcs
+    ${asmDir}/bn/armv8-mont.S
+    )
+  source_group(bn\\_asm FILES ${bn_asm_srcs})
+  list(APPEND bn_srcs ${bn_asm_srcs})
+  list(APPEND asm_defs
+    OPENSSL_BN_ASM_MONT
     )
 endif()
-source_group(bn FILES ${bn_srcs})
 list(APPEND ${lib_name}_libsrcs ${bn_srcs})
 ##########
 list(APPEND bn_extra # in directory, not in build.info
@@ -420,7 +501,7 @@ list(APPEND bn_extra # TODO asm
   bn/asm/sparcv9-mont.pl
   bn/asm/via-mont.pl
   bn/asm/vis3-mont.pl
-  bn/asm/x86_64-gcc.c # TRICKY part of bn_asm_srcs below
+  bn/asm/x86_64-gcc.c # NOTE: part of bn_asm_srcs above
   bn/asm/x86_64-gf2m.pl
   bn/asm/x86_64-mont5.pl
   bn/asm/x86_64-mont.pl
@@ -450,7 +531,8 @@ list(APPEND camellia_srcs
   camellia/cmll_local.h
   camellia/cmll_misc.c # cmll_asm_src DEFAULT (Configurations/00-base-templates.conf)
   )
-if(NOT ASM_BUILD)
+##########
+if(NOT ASM_BUILD OR CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
   list(APPEND camellia_srcs
     camellia/camellia.c # cmll_asm_src DEFAULT (Configurations/00-base-templates.conf)
     camellia/cmll_cbc.c # cmll_asm_src DEFAULT (Configurations/00-base-templates.conf)
@@ -462,6 +544,13 @@ else()
     )
 endif()
 source_group(camellia FILES ${camellia_srcs})
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(camellia_asm_srcs
+    ${asmDir}/camellia/cmll-x86_64.${asmExt}
+    )
+  source_group(camellia\\_asm FILES ${camellia_asm_srcs})
+  list(APPEND camellia_srcs ${camellia_asm_srcs})
+endif()
 list(APPEND ${lib_name}_libsrcs ${camellia_srcs})
 ##########
 list(APPEND camellia_extra # TODO asm
@@ -506,6 +595,20 @@ else()
     )
 endif()
 source_group(chacha FILES ${chacha_srcs})
+##########
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(chacha_asm_srcs
+    ${asmDir}/chacha/chacha-x86_64.${asmExt}
+    )
+  source_group(chacha\\_asm FILES ${chacha_asm_srcs})
+  list(APPEND chacha_srcs ${chacha_asm_srcs})
+elseif(CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
+  set(chacha_asm_srcs
+    ${asmDir}/chacha/chacha-armv8.S
+    )
+  source_group(chacha\\_asm FILES ${chacha_asm_srcs})
+  list(APPEND chacha_srcs ${chacha_asm_srcs})
+endif()
 list(APPEND ${lib_name}_libsrcs ${chacha_srcs})
 ##########
 list(APPEND chacha_extra # TODO asm
@@ -785,8 +888,29 @@ list(APPEND ec_curve448_arch_32_srcs
   )
 source_group(ec\\curve448\\arch_32 FILES ${ec_curve448_arch_32_srcs})
 list(APPEND ec_srcs ${ec_curve448_arch_32_srcs})
-list(APPEND ${lib_name}_libsrcs ${ec_srcs})
 ##########
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(ec_asm_srcs
+    ${asmDir}/ec/ecp_nistz256-x86_64.${asmExt}
+    ${asmDir}/ec/x25519-x86_64.${asmExt}
+    )
+  source_group(ec\\_asm FILES ${ec_asm_srcs})
+  list(APPEND ec_srcs ${ec_asm_srcs})
+  list(APPEND asm_defs
+    ECP_NISTZ256_ASM
+    X25519_ASM
+    )
+elseif(CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
+  set(ec_asm_srcs
+    ${asmDir}/ec/ecp_nistz256-armv8.S
+    )
+  source_group(ec\\_asm FILES ${ec_asm_srcs})
+  list(APPEND ec_srcs ${ec_asm_srcs})
+  list(APPEND asm_defs
+    ECP_NISTZ256_ASM
+    )
+endif()
+list(APPEND ${lib_name}_libsrcs ${ec_srcs})
 set(ec_extra # in directory, not in build.info
   ec/ecp_nistz256_table.c # TODO libsrcs?
   )
@@ -1009,8 +1133,18 @@ list(APPEND md5_srcs
   md5/md5_local.h
   )
 source_group(md5 FILES ${md5_srcs})
-list(APPEND ${lib_name}_libsrcs ${md5_srcs})
 ##########
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(md5_asm_srcs
+    ${asmDir}/md5/md5-x86_64.${asmExt}
+    )
+  source_group(md5\\_asm FILES ${md5_asm_srcs})
+  list(APPEND md5_srcs ${md5_asm_srcs})
+  list(APPEND asm_defs
+    MD5_ASM
+    )
+endif()
+list(APPEND ${lib_name}_libsrcs ${md5_srcs})
 set(md5_extra # TODO asm
   md5/asm/md5-586.pl
   md5/asm/md5-sparcv9.pl
@@ -1045,8 +1179,25 @@ list(APPEND modes_srcs
   modes/modes_local.h
   )
 source_group(modes FILES ${modes_srcs})
-list(APPEND ${lib_name}_libsrcs ${modes_srcs})
 ##########
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(modes_asm_srcs
+    ${asmDir}/modes/aesni-gcm-x86_64.${asmExt}
+    ${asmDir}/modes/ghash-x86_64.${asmExt}
+    )
+  source_group(modes\\_asm FILES ${modes_asm_srcs})
+  list(APPEND modes_srcs ${modes_asm_srcs})
+  list(APPEND asm_defs
+    GHASH_ASM
+    )
+elseif(CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
+  set(modes_asm_srcs
+    ${asmDir}/modes/ghashv8-armx.S
+    )
+  source_group(modes\\_asm FILES ${modes_asm_srcs})
+  list(APPEND modes_srcs ${modes_asm_srcs})
+endif()
+list(APPEND ${lib_name}_libsrcs ${modes_srcs})
 set(modes_extra # TODO asm
   modes/asm/aesni-gcm-x86_64.pl
   modes/asm/ghash-alpha.pl
@@ -1193,12 +1344,32 @@ list(APPEND poly1305_srcs
   poly1305/poly1305_local.h
   )
 source_group(poly1305 FILES ${poly1305_srcs})
-list(APPEND ${lib_name}_libsrcs ${poly1305_srcs})
 ##########
 set(poly1305_extra # in directory, not in build.info
   poly1305/poly1305_base2_44.c # TODO libsrcs?
   poly1305/poly1305_ieee754.c # TODO libsrcs?
   )
+##########
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(poly1305_asm_srcs
+    ${asmDir}/poly1305/poly1305-x86_64.${asmExt}
+    )
+  source_group(poly1305\\_asm FILES ${poly1305_asm_srcs})
+  list(APPEND poly1305_srcs ${poly1305_asm_srcs})
+  list(APPEND asm_defs
+    POLY1305_ASM
+    )
+elseif(CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
+  set(poly1305_asm_srcs
+    ${asmDir}/poly1305/poly1305-armv8.S
+    )
+  source_group(poly1305\\_asm FILES ${poly1305_asm_srcs})
+  list(APPEND poly1305_srcs ${poly1305_asm_srcs})
+  list(APPEND asm_defs
+    POLY1305_ASM
+    )
+endif()
+list(APPEND ${lib_name}_libsrcs ${poly1305_srcs})
 list(APPEND poly1305_extra # TODO asm
   poly1305/asm/poly1305-armv4.pl
   poly1305/asm/poly1305-armv8.pl
@@ -1252,7 +1423,8 @@ set(rc4_srcs
   rc4/build.info
   rc4/rc4_local.h
   )
-if(NOT ASM_BUILD)
+##########
+if(NOT ASM_BUILD OR CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
   list(APPEND rc4_srcs
     rc4/rc4_enc.c # rc4_asm_src DEFAULT (Configurations/00-base-templates.conf)
     rc4/rc4_skey.c # rc4_asm_src DEFAULT (Configurations/00-base-templates.conf)
@@ -1264,6 +1436,17 @@ else()
     )
 endif()
 source_group(rc4 FILES ${rc4_srcs})
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(rc4_asm_srcs
+    ${asmDir}/rc4/rc4-md5-x86_64.${asmExt}
+    ${asmDir}/rc4/rc4-x86_64.${asmExt}
+    )
+  source_group(rc4\\_asm FILES ${rc4_asm_srcs})
+  list(APPEND rc4_srcs ${rc4_asm_srcs})
+  list(APPEND asm_defs
+    RC4_ASM
+    )
+endif()
 list(APPEND ${lib_name}_libsrcs ${rc4_srcs})
 ##########
 list(APPEND rc4_extra # TODO asm
@@ -1382,6 +1565,40 @@ else()
     )
 endif()
 source_group(sha FILES ${sha_srcs})
+##########
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(sha_asm_srcs
+    ${asmDir}/sha/keccak1600-x86_64.${asmExt}
+    ${asmDir}/sha/sha1-mb-x86_64.${asmExt}
+    ${asmDir}/sha/sha1-x86_64.${asmExt}
+    ${asmDir}/sha/sha256-mb-x86_64.${asmExt}
+    ${asmDir}/sha/sha256-x86_64.${asmExt}
+    ${asmDir}/sha/sha512-x86_64.${asmExt}
+    )
+  source_group(sha\\_asm FILES ${sha_asm_srcs})
+  list(APPEND sha_srcs ${sha_asm_srcs})
+  list(APPEND asm_defs
+    KECCAK1600_ASM
+    SHA1_ASM # NOTE: must define L_ENDIAN for x86 (OPENSSL_DEFS)
+    SHA256_ASM
+    SHA512_ASM
+    )
+elseif(CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
+  set(sha_asm_srcs
+    ${asmDir}/sha/keccak1600-armv8.S
+    ${asmDir}/sha/sha1-armv8.S
+    ${asmDir}/sha/sha256-armv8.S
+    ${asmDir}/sha/sha512-armv8.S
+    )
+  source_group(sha\\_asm FILES ${sha_asm_srcs})
+  list(APPEND sha_srcs ${sha_asm_srcs})
+  list(APPEND asm_defs
+    KECCAK1600_ASM
+    SHA1_ASM
+    SHA256_ASM
+    SHA512_ASM
+    )
+endif()
 list(APPEND ${lib_name}_libsrcs ${sha_srcs})
 ##########
 list(APPEND sha_extra # TODO asm
@@ -1559,7 +1776,8 @@ set(whrlpool_srcs # order from crypto/whrlpool/build.info
 list(APPEND whrlpool_srcs
   whrlpool/wp_local.h
   )
-if(NOT ASM_BUILD)
+##########
+if(NOT ASM_BUILD OR CMAKE_ASM_COMPILER_LOADED) # arm64|aarch64
   list(APPEND whrlpool_srcs
     whrlpool/wp_block.c # wp_asm_src DEFAULT (Configurations/00-base-templates.conf)
     )
@@ -1569,6 +1787,16 @@ else()
     )
 endif()
 source_group(whrlpool FILES ${whrlpool_srcs})
+if(CMAKE_ASM_NASM_COMPILER_LOADED) # x86_64|AMD64
+  set(whrlpool_asm_srcs
+    ${asmDir}/whrlpool/wp-x86_64.${asmExt}
+    )
+  source_group(whrlpool\\asm FILES ${whrlpool_asm_srcs})
+  list(APPEND whrlpool_srcs ${whrlpool_asm_srcs})
+  list(APPEND asm_defs
+    WHIRLPOOL_ASM
+    )
+endif()
 list(APPEND ${lib_name}_libsrcs ${whrlpool_srcs})
 ##########
 list(APPEND whrlpool_extra # TODO asm
@@ -1673,107 +1901,6 @@ list(APPEND x509v3_srcs
 source_group(x509v3 FILES ${x509v3_srcs})
 list(APPEND ${lib_name}_libsrcs ${x509v3_srcs})
 ########################################
-set(asmDir ../${asmDir}/crypto)
-if(MSVC)
-  set(asmExt asm)
-elseif(UNIX)
-  set(asmExt s)
-endif()
-if(ASM_BUILD)
-  set(root_asm_srcs
-    ${asmDir}/x86_64cpuid.${asmExt} # cpuid_asm_src
-    )
-  source_group(asm FILES ${root_asm_srcs})
-  set(asm_srcs ${root_asm_srcs})
-  ##########
-  set(aes_asm_srcs
-    ${asmDir}/aes/aesni-mb-x86_64.${asmExt}
-    ${asmDir}/aes/aesni-sha1-x86_64.${asmExt}
-    ${asmDir}/aes/aesni-sha256-x86_64.${asmExt}
-    ${asmDir}/aes/aesni-x86_64.${asmExt}
-    #${asmDir}/aes/aes-x86_64.${asmExt} # multiple definition of AES_encrypt (first defined in aes_core.c)
-    #${asmDir}/aes/bsaes-x86_64.${asmExt} # not in aes_asm_src (Configurations/00-base-templates.conf)
-    ${asmDir}/aes/vpaes-x86_64.${asmExt}
-    )
-  source_group(aes\\asm FILES ${aes_asm_srcs})
-  list(APPEND asm_srcs ${aes_asm_srcs})
-  ##########
-  set(bn_asm_srcs
-    bn/asm/x86_64-gcc.c
-    ${asmDir}/bn/rsaz-avx2.${asmExt}
-    ${asmDir}/bn/rsaz-x86_64.${asmExt}
-    ${asmDir}/bn/x86_64-gf2m.${asmExt}
-    ${asmDir}/bn/x86_64-mont5.${asmExt}
-    ${asmDir}/bn/x86_64-mont.${asmExt}
-    )
-  source_group(bn\\asm FILES ${bn_asm_srcs})
-  list(APPEND asm_srcs ${bn_asm_srcs})
-  ##########
-  set(camellia_asm_srcs
-    ${asmDir}/camellia/cmll-x86_64.${asmExt}
-    )
-  source_group(camellia\\asm FILES ${camellia_asm_srcs})
-  list(APPEND asm_srcs ${camellia_asm_srcs})
-  ##########
-  set(chacha_asm_srcs
-    ${asmDir}/chacha/chacha-x86_64.${asmExt}
-    )
-  source_group(chacha\\asm FILES ${chacha_asm_srcs})
-  list(APPEND asm_srcs ${chacha_asm_srcs})
-  ##########
-  set(ec_asm_srcs
-    ${asmDir}/ec/ecp_nistz256-x86_64.${asmExt}
-    ${asmDir}/ec/x25519-x86_64.${asmExt}
-    )
-  source_group(ec\\asm FILES ${ec_asm_srcs})
-  list(APPEND asm_srcs ${ec_asm_srcs})
-  ##########
-  set(md5_asm_srcs
-    ${asmDir}/md5/md5-x86_64.${asmExt}
-    )
-  source_group(md5\\asm FILES ${md5_asm_srcs})
-  list(APPEND asm_srcs ${md5_asm_srcs})
-  ##########
-  set(modes_asm_srcs
-    ${asmDir}/modes/aesni-gcm-x86_64.${asmExt}
-    ${asmDir}/modes/ghash-x86_64.${asmExt}
-    )
-  source_group(modes\\asm FILES ${modes_asm_srcs})
-  list(APPEND asm_srcs ${modes_asm_srcs})
-  ##########
-  set(poly1305_asm_srcs
-    ${asmDir}/poly1305/poly1305-x86_64.${asmExt}
-    )
-  source_group(poly1305\\asm FILES ${poly1305_asm_srcs})
-  list(APPEND asm_srcs ${poly1305_asm_srcs})
-  ##########
-  set(rc4_asm_srcs
-    ${asmDir}/rc4/rc4-md5-x86_64.${asmExt}
-    ${asmDir}/rc4/rc4-x86_64.${asmExt}
-    )
-  source_group(rc4\\asm FILES ${rc4_asm_srcs})
-  list(APPEND asm_srcs ${rc4_asm_srcs})
-  ##########
-  set(sha_asm_srcs
-    ${asmDir}/sha/keccak1600-x86_64.${asmExt}
-    ${asmDir}/sha/sha1-mb-x86_64.${asmExt}
-    ${asmDir}/sha/sha1-x86_64.${asmExt}
-    ${asmDir}/sha/sha256-mb-x86_64.${asmExt}
-    ${asmDir}/sha/sha256-x86_64.${asmExt}
-    ${asmDir}/sha/sha512-x86_64.${asmExt}
-    )
-  source_group(sha\\asm FILES ${sha_asm_srcs})
-  list(APPEND asm_srcs ${sha_asm_srcs})
-  ##########
-  set(whrlpool_asm_srcs
-    ${asmDir}/whrlpool/wp-x86_64.${asmExt}
-    )
-  source_group(whrlpool\\asm FILES ${whrlpool_asm_srcs})
-  list(APPEND asm_srcs ${whrlpool_asm_srcs})
-  ##########
-  list(APPEND ${lib_name}_libsrcs ${asm_srcs})
-endif()
-########################################
 add_library(${lib_name} STATIC ${${lib_name}_libsrcs})
 target_include_directories(${lib_name} PRIVATE
   ${CMAKE_CURRENT_BINARY_DIR} # buildinf.h
@@ -1784,7 +1911,9 @@ target_include_directories(${lib_name} PRIVATE
   PUBLIC
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
-target_compile_definitions(${lib_name} PUBLIC $<INSTALL_INTERFACE:OPENSSL_API_COMPAT=0x10100000L>)
+target_compile_definitions(${lib_name} PUBLIC $<INSTALL_INTERFACE:OPENSSL_API_COMPAT=0x10100000L>
+  PRIVATE ${asm_defs}
+  )
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 target_link_libraries(${lib_name} PUBLIC $<BUILD_INTERFACE:include> PRIVATE Threads::Threads ${CMAKE_DL_LIBS})

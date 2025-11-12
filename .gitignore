@@ -184,3 +184,8 @@ pod2htmd.tmp
 # Windows manifest files
 *.manifest
 doc-nits
+
+# externpro
+.env
+_bld*/
+docker-compose.override.yml

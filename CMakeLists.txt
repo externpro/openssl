@@ -1,13 +1,14 @@
 cmake_minimum_required(VERSION 3.31)
+set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES .devcontainer/cmake/xproinc.cmake)
 project(openssl LANGUAGES C ASM)
 include(GNUInstallDirs)
 include(xpflags)
-########################################
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # enables MSVC Solution Folders
+########################################
 # NOTE: attempted to make OPENSSL_DEFS match other build systems (node.js and openssl perl)
 set(OPENSSL_DEFS
   -D_REENTRANT
-  -DL_ENDIAN
+  -DL_ENDIAN # NOTE: SHA1_ASM must define L_ENDIAN for x86
   -DOPENSSL_PIC
   -DOPENSSLDIR=\"/etc/ssl\"
   -DENGINESDIR=\"/dev/null\"
@@ -20,49 +21,54 @@ if(WIN32)
     -D_CRT_SECURE_NO_DEPRECATE
     -D_WINSOCK_DEPRECATED_NO_WARNINGS
     )
-  set(asmDir asmfromnode/archs/VC-WIN64A/asm)
 elseif(UNIX)
   list(APPEND OPENSSL_DEFS
     -DOPENSSL_USE_NODELETE
     )
-  set(asmDir asmfromnode/archs/linux-${CMAKE_SYSTEM_PROCESSOR}/asm)
 endif()
-if((CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64") AND WIN32)
-  enable_language(ASM_NASM) # -DCMAKE_ASM_NASM_COMPILER=/path/to/nasm.exe
-endif()
-if(EXISTS ${CMAKE_SOURCE_DIR}/${asmDir} AND IS_DIRECTORY ${CMAKE_SOURCE_DIR}/${asmDir})
-  set(ASM_BUILD TRUE)
-  list(APPEND OPENSSL_DEFS
-    -DOPENSSL_CPUID_OBJ
-    -DOPENSSL_IA32_SSE2
-    -DOPENSSL_BN_ASM_MONT
-    -DOPENSSL_BN_ASM_GF2m
-    -DSHA1_ASM # must define L_ENDIAN for x86
-    -DSHA256_ASM
-    -DSHA512_ASM
-    -DRC4_ASM
-    -DMD5_ASM
-    -DVPAES_ASM
-    -DGHASH_ASM
-    -DECP_NISTZ256_ASM
-    -DPOLY1305_ASM
-    )
+########################################
+include(FetchContent)
+FetchContent_Declare(node
+  GIT_REPOSITORY https://github.com/nodejs/node
+  GIT_TAG v14.17.6 # for openssl 1.1.1l
+  GIT_SHALLOW TRUE
+  )
+FetchContent_MakeAvailable(node)
+# assembly from node.js
+include(asmfromnode/copyfromnode.cmake)
+set(ASM_BUILD FALSE)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
   if(WIN32)
-    list(APPEND OPENSSL_DEFS
-      -DRMD160_ASM
-      -DAES_ASM
-      -DWHIRLPOOL_ASM
-      -DPADLOCK_ASM
-      )
+    set(asmDir ${CMAKE_SOURCE_DIR}/asmfromnode/archs/VC-WIN64A/asm)
+    xpFindPkg(PKGS nasm)
+    xpGetPkgVar(nasm EXE) # sets NASM_EXE
+    set(CMAKE_ASM_NASM_COMPILER ${NASM_EXE})
+    enable_language(ASM_NASM)
   elseif(UNIX)
-    list(APPEND OPENSSL_DEFS
-      -DOPENSSL_BN_ASM_MONT5
-      -DKECCAK1600_ASM
-      -DX25519_ASM
-      )
+    set(asmDir ${CMAKE_SOURCE_DIR}/asmfromnode/archs/linux-${CMAKE_SYSTEM_PROCESSOR}/asm)
+    xpFindPkg(PKGS yasm)
+    xpGetPkgVar(yasm EXE) # sets YASM_EXE
+    get_target_property(yasmExe ${YASM_EXE} LOCATION)
+    set(CMAKE_ASM_NASM_COMPILER ${yasmExe})
+    enable_language(ASM_NASM)
   endif()
+  if(CMAKE_ASM_NASM_COMPILER_LOADED AND EXISTS ${asmDir} AND IS_DIRECTORY ${asmDir})
+    set(ASM_BUILD TRUE)
+  endif()
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+  enable_language(ASM)
+  if(APPLE)
+    set(asmDir ${CMAKE_SOURCE_DIR}/asmfromnode/archs/darwin64-arm64-cc/asm)
+  elseif(UNIX)
+    set(asmDir ${CMAKE_SOURCE_DIR}/asmfromnode/archs/linux-aarch64/asm)
+  endif()
+  if(CMAKE_ASM_COMPILER_LOADED AND EXISTS ${asmDir} AND IS_DIRECTORY ${asmDir})
+    set(ASM_BUILD TRUE)
+  endif()
+endif()
+if(ASM_BUILD)
+  message(STATUS "ASM directory: ${asmDir}")
 else()
-  set(ASM_BUILD FALSE)
   list(APPEND OPENSSL_DEFS
     -DOPENSSL_NO_ASM
     )
@@ -97,17 +103,25 @@ function(compareCmakeFilesys files)
   endif()
 endfunction()
 ########################################
+set(libs crypto ssl)
+if(DEFINED XP_NAMESPACE)
+  set(nameSpace NAMESPACE ${XP_NAMESPACE}::)
+  list(TRANSFORM libs PREPEND "${XP_NAMESPACE}::")
+endif()
+if(NOT DEFINED XP_INSTALL_CMAKEDIR)
+  set(XP_INSTALL_CMAKEDIR ${CMAKE_INSTALL_DATADIR}/cmake)
+endif()
 set(targetsFile ${PROJECT_NAME}-targets)
+string(JOIN "\n" EXT1
+  "set(THREAD_PREFER_PTHREAD_FLAG ON)"
+  "find_package(Threads REQUIRED) # crypto depends on Threads::Threads"
+  ""
+  )
+xpPackageDevel(TARGETS_FILE ${targetsFile} LIBRARIES ${libs})
 ########################################
 add_subdirectory(include)
 add_subdirectory(crypto)
 add_subdirectory(ssl)
 add_subdirectory(apps)
 add_subdirectory(test)
-if(DEFINED XP_NAMESPACE)
-  set(nameSpace NAMESPACE ${XP_NAMESPACE}::)
-endif()
-if(NOT DEFINED XP_INSTALL_CMAKEDIR)
-  set(XP_INSTALL_CMAKEDIR ${CMAKE_INSTALL_DATADIR}/cmake)
-endif()
 install(EXPORT ${targetsFile} DESTINATION ${XP_INSTALL_CMAKEDIR} ${nameSpace})
