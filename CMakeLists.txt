@@ -101,21 +101,28 @@ function(compareCmakeFilesys files)
   endif()
 endfunction()
 ########################################
-set(libs crypto ssl)
-if(DEFINED XP_NAMESPACE)
-  set(nameSpace NAMESPACE ${XP_NAMESPACE}::)
-  list(TRANSFORM libs PREPEND "${XP_NAMESPACE}::")
-endif()
-if(NOT DEFINED XP_INSTALL_CMAKEDIR)
-  set(XP_INSTALL_CMAKEDIR ${CMAKE_INSTALL_DATADIR}/cmake)
-endif()
 set(targetsFile ${PROJECT_NAME}-targets)
-string(JOIN "\n" EXT1
-  "set(THREAD_PREFER_PTHREAD_FLAG ON)"
-  "find_package(Threads REQUIRED) # crypto depends on Threads::Threads"
-  ""
-  )
-xpPackageDevel(TARGETS_FILE ${targetsFile} LIBRARIES ${libs})
+if(DEFINED XP_NAMESPACE)
+  string(JOIN "\n" ALIASES
+    "if(NOT TARGET OpenSSL::Crypto)"
+    "  add_library(OpenSSL::Crypto ALIAS ${XP_NAMESPACE}::crypto)"
+    "endif()"
+    ""
+    "if(NOT TARGET OpenSSL::SSL)"
+    "  add_library(OpenSSL::SSL ALIAS ${XP_NAMESPACE}::ssl)"
+    "endif()"
+    ""
+    )
+  xpExternPackage(NAMESPACE ${XP_NAMESPACE}
+    TARGETS_FILE ${targetsFile} LIBRARIES crypto ssl
+    BASE OpenSSL_1_1_1l XPDIFF "intro"
+    FIND_THREADS PVT_DEPS nasm yasm
+    WEB "http://www.openssl.org/" UPSTREAM "github.com/openssl/openssl"
+    DESC "Cryptography and SSL/TLS Toolkit"
+    LICENSE "[BSD-style](http://www.openssl.org/source/license.html 'dual OpenSSL and SSLeay License: both are BSD-style licenses')"
+    )
+  set(nameSpace NAMESPACE ${XP_NAMESPACE}::)
+endif()
 ########################################
 add_subdirectory(include)
 add_subdirectory(crypto)
