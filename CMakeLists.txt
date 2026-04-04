@@ -119,7 +119,7 @@ if(DEFINED XP_NAMESPACE)
     FIND_THREADS PVT_DEPS nasm yasm
     WEB "http://www.openssl.org/" UPSTREAM "github.com/openssl/openssl"
     DESC "Cryptography and SSL/TLS Toolkit"
-    LICENSE "[BSD-style](http://www.openssl.org/source/license.html 'dual OpenSSL and SSLeay License: both are BSD-style licenses')"
+    LICENSE "[OpenSSL AND SSLeay](http://www.openssl.org/source/license.html 'dual OpenSSL and SSLeay License: both apply')"
     )
   set(nameSpace NAMESPACE ${XP_NAMESPACE}::)
 endif()
