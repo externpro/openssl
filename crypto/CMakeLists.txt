@@ -1920,7 +1920,27 @@ target_link_libraries(${lib_name} PUBLIC $<BUILD_INTERFACE:include> PRIVATE Thre
 include(CheckLibraryExists)
 check_library_exists(ws2_32 getch "" CRYPTO_HAS_WS2_32)
 if(CRYPTO_HAS_WS2_32)
-  target_link_libraries(${lib_name} PRIVATE ws2_32)
+  set(_ws2_arch ${CMAKE_GENERATOR_PLATFORM})
+  if(NOT _ws2_arch)
+    set(_ws2_arch x64)
+  endif()
+  set(_ws2_sdk ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION})
+  if(_ws2_sdk)
+    find_library(WS2_32_LIBRARY ws2_32
+      PATHS "C:/Program Files (x86)/Windows Kits/10/Lib/${_ws2_sdk}/um/${_ws2_arch}"
+            "C:/Program Files/Windows Kits/10/Lib/${_ws2_sdk}/um/${_ws2_arch}"
+      NO_DEFAULT_PATH
+    )
+  endif()
+  if(WS2_32_LIBRARY)
+    target_link_libraries(${lib_name} INTERFACE "$<BUILD_INTERFACE:${WS2_32_LIBRARY}>$<INSTALL_INTERFACE:ws2_32>")
+  else()
+    message(WARNING "ws2_32.lib not found; falling back to short name")
+    target_link_libraries(${lib_name} INTERFACE "ws2_32.lib")
+  endif()
+  unset(_ws2_arch)
+  unset(_ws2_sdk)
+  unset(WS2_32_LIBRARY)
 endif()
 ########################################
 install(TARGETS ${lib_name} EXPORT ${targetsFile}

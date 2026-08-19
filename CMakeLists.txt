@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.31)
-set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES .devcontainer/cmake/xproinc.cmake)
+cmake_minimum_required(VERSION 4.3)
 project(openssl LANGUAGES C ASM)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON) # enables MSVC Solution Folders
 ########################################
@@ -8,8 +7,8 @@ set(OPENSSL_DEFS
   -D_REENTRANT
   -DL_ENDIAN # NOTE: SHA1_ASM must define L_ENDIAN for x86
   -DOPENSSL_PIC
-  -DOPENSSLDIR=\"/etc/ssl\"
-  -DENGINESDIR=\"/dev/null\"
+  [[-DOPENSSLDIR="/etc/ssl"]]
+  [[-DENGINESDIR="/dev/null"]]
   )
 if(WIN32)
   list(APPEND OPENSSL_DEFS
@@ -102,31 +101,27 @@ function(compareCmakeFilesys files)
 endfunction()
 ########################################
 set(targetsFile ${PROJECT_NAME}-targets)
-if(DEFINED XP_NAMESPACE)
-  string(JOIN "\n" ALIASES
-    "if(NOT TARGET OpenSSL::Crypto)"
-    "  add_library(OpenSSL::Crypto ALIAS ${XP_NAMESPACE}::crypto)"
-    "endif()"
-    ""
-    "if(NOT TARGET OpenSSL::SSL)"
-    "  add_library(OpenSSL::SSL ALIAS ${XP_NAMESPACE}::ssl)"
-    "endif()"
-    ""
-    )
-  xpExternPackage(NAMESPACE ${XP_NAMESPACE}
-    TARGETS_FILE ${targetsFile} LIBRARIES crypto ssl
-    BASE OpenSSL_1_1_1l XPDIFF "intro"
-    FIND_THREADS PVT_DEPS nasm yasm
-    WEB "http://www.openssl.org/" UPSTREAM "github.com/openssl/openssl"
-    DESC "Cryptography and SSL/TLS Toolkit"
-    LICENSE "[OpenSSL AND SSLeay](http://www.openssl.org/source/license.html 'dual OpenSSL and SSLeay License: both apply')"
-    )
-  set(nameSpace NAMESPACE ${XP_NAMESPACE}::)
-endif()
-########################################
 add_subdirectory(include)
 add_subdirectory(crypto)
 add_subdirectory(ssl)
 add_subdirectory(apps)
 add_subdirectory(test)
-install(EXPORT ${targetsFile} DESTINATION ${CMAKE_INSTALL_CMAKEDIR} ${nameSpace})
+if(COMMAND xpExternPackage)
+  string(JOIN "\n" ALIASES
+    "if(NOT TARGET OpenSSL::Crypto)"
+    "  add_library(OpenSSL::Crypto ALIAS ${CMAKE_PROJECT_NAME}::crypto)"
+    "endif()"
+    "if(NOT TARGET OpenSSL::SSL)"
+    "  add_library(OpenSSL::SSL ALIAS ${CMAKE_PROJECT_NAME}::ssl)"
+    "endif()"
+    ""
+    )
+  xpExternPackage(TARGETS_FILE ${targetsFile}
+    LIBRARIES crypto ssl DEFAULT_TARGETS crypto ssl
+    BASE OpenSSL_1_1_1l XPDIFF "intro" PVT_DEPS nasm yasm
+    WEB "http://www.openssl.org/" UPSTREAM "github.com/openssl/openssl"
+    DESC "Cryptography and SSL/TLS Toolkit"
+    LICENSE "[OpenSSL AND SSLeay](http://www.openssl.org/source/license.html 'dual OpenSSL and SSLeay License: both apply')"
+    )
+endif()
+install(EXPORT ${targetsFile} DESTINATION ${CMAKE_INSTALL_CMAKEDIR} NAMESPACE ${CMAKE_PROJECT_NAME}::)
