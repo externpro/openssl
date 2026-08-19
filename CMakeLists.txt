@@ -8,8 +8,8 @@ set(OPENSSL_DEFS
   -D_REENTRANT
   -DL_ENDIAN # NOTE: SHA1_ASM must define L_ENDIAN for x86
   -DOPENSSL_PIC
-  -DOPENSSLDIR=\"/etc/ssl\"
-  -DENGINESDIR=\"/dev/null\"
+  [[-DOPENSSLDIR="/etc/ssl"]]
+  [[-DENGINESDIR="/dev/null"]]
   )
 if(WIN32)
   list(APPEND OPENSSL_DEFS
