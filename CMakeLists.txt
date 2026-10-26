@@ -107,15 +107,8 @@ add_subdirectory(ssl)
 add_subdirectory(apps)
 add_subdirectory(test)
 if(COMMAND xpExternPackage)
-  string(JOIN "\n" ALIASES
-    "if(NOT TARGET OpenSSL::Crypto)"
-    "  add_library(OpenSSL::Crypto ALIAS ${CMAKE_PROJECT_NAME}::crypto)"
-    "endif()"
-    "if(NOT TARGET OpenSSL::SSL)"
-    "  add_library(OpenSSL::SSL ALIAS ${CMAKE_PROJECT_NAME}::ssl)"
-    "endif()"
-    ""
-    )
+  xpAlias(OpenSSL::Crypto crypto)
+  xpAlias(OpenSSL::SSL ssl)
   xpExternPackage(TARGETS_FILE ${targetsFile}
     LIBRARIES crypto ssl DEFAULT_TARGETS crypto ssl
     BASE OpenSSL_1_1_1l XPDIFF "intro" PVT_DEPS nasm yasm
