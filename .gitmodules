@@ -9,8 +9,8 @@
 [submodule "krb5"]
 	path = krb5
 	url = https://github.com/krb5/krb5
-[submodule ".devcontainer"]
-	path = .devcontainer
+[submodule ".externpro"]
+	path = .externpro
 	url = https://github.com/externpro/externpro
 [submodule "asmfromnode"]
 	path = asmfromnode
